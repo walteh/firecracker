@@ -6,6 +6,7 @@
 """
 Metadata we want to attach to tests for further analysis and troubleshooting
 """
+
 import os
 import platform
 import re
@@ -28,6 +29,9 @@ def get_os_version():
     >>> get_os_version()
     'Ubuntu 24.04.1 LTS'
     """
+
+    if platform.system() == "Darwin":
+        return platform.mac_ver()[0]
 
     os_release = Path("/etc/os-release").read_text(encoding="ascii")
     match = re.search('PRETTY_NAME="(.*)"', os_release)
@@ -62,9 +66,12 @@ class GlobalProps:
         self.cpu_model = get_cpu_model_name()
         self.cpu_codename = get_cpu_codename()
         self.cpu_vendor = get_cpu_vendor().name.lower()
-        self.cpu_microcode = run_cmd(
-            "grep microcode /proc/cpuinfo |head -1 |awk '{print $3}'"
-        )
+        if platform.system() == "Darwin":
+            self.cpu_microcode = "0x0"
+        else:
+            self.cpu_microcode = run_cmd(
+                "grep microcode /proc/cpuinfo |head -1 |awk '{print $3}'"
+            )
         self.host_linux_full_version = platform.release()
         # major.minor
         self.host_linux_version = get_kernel_version(1)

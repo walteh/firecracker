@@ -54,6 +54,9 @@ CPU_DICT = {
 
 def get_cpu_vendor():
     """Return the CPU vendor."""
+    if platform.system() == "Darwin":
+        return CpuVendor.ARM
+
     brand_str = subprocess.check_output("lscpu", shell=True).strip().decode()
     machine_str = platform.machine()
     if "AuthenticAMD" in brand_str:
@@ -65,11 +68,39 @@ def get_cpu_vendor():
 
 def get_cpu_model_name():
     """Return the CPU model name."""
+    print(f"platform.machine(): {platform.machine()}")
+    print(f"platform.processor(): {platform.processor()}")
+    print(f"platform.release(): {platform.release()}")
+    print(f"platform.version(): {platform.version()}")
+    print(f"platform.uname(): {platform.uname()}")
+    print(f"platform.node(): {platform.node()}")
+    print(f"platform.system(): {platform.system()}")
+    print(f"platform.libc_ver(): {platform.libc_ver()}")
+    print(f"platform.platform(): {platform.platform()}")
+    print(f"platform.python_version(): {platform.python_version()}")
+    print(f"platform.python_version(): {platform.python_version()}")
+
+    if platform.system() == "Darwin":
+        _, stdout, stderr = check_output("sysctl -n machdep.cpu.brand_string")
+        if stderr:
+            print(f"Error getting CPU model name: {stderr}")
+            return "Unknown"
+        print(f"stdout: {stdout}")
+        info = stdout.strip().split(sep=":")
+        return info
+
     if platform.machine() == "aarch64":
-        _, stdout, _ = check_output("cat /proc/cpuinfo | grep 'CPU part' | uniq")
+        _, stdout, stderr = check_output("cat /proc/cpuinfo | grep 'CPU part' | uniq")
+        if stderr:
+            print(f"Error getting CPU model name: {stderr}")
+            return "Unknown"
+        info = stdout.strip().split(sep=":")
     else:
-        _, stdout, _ = check_output("cat /proc/cpuinfo | grep 'model name' | uniq")
-    info = stdout.strip().split(sep=":")
+        _, stdout, stderr = check_output("cat /proc/cpuinfo | grep 'model name' | uniq")
+        if stderr:
+            print(f"Error getting CPU model name: {stderr}")
+            return "Unknown"
+        info = stdout.strip().split(sep=":")
     assert len(info) == 2
     raw_cpu_model = info[1].strip()
     if platform.machine() == "x86_64":

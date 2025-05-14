@@ -22,10 +22,8 @@ designed with the following goals in mind:
 import inspect
 import json
 import os
-import platform
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -44,6 +42,12 @@ from framework.utils_cpu_templates import (
 from host_tools.metrics import get_metrics_logger
 from host_tools.network import NetNs
 
+import platform
+
+# On non-Linux systems, stub out network namespace creation to avoid 'ip netns' calls.
+if platform.system() != "Linux":
+    NetNs.setup = lambda self: None
+
 # This codebase uses Python features available in Python 3.10 or above
 if sys.version_info < (3, 10):
     raise SystemError("This codebase requires Python 3.10 or above.")
@@ -56,6 +60,12 @@ if os.geteuid() != 0:
 
 METRICS = get_metrics_logger()
 PHASE_REPORT_KEY = pytest.StashKey[dict[str, pytest.CollectReport]]()
+
+# Override the session‑root to a tmp folder you control:
+defs.DEFAULT_TEST_SESSION_ROOT_PATH = "/tmp/firecracker-sessions"
+
+# make sure the defs.DEFAULT_TEST_SESSION_ROOT_PATH exists
+os.makedirs(defs.DEFAULT_TEST_SESSION_ROOT_PATH, exist_ok=True)
 
 
 def pytest_addoption(parser):
@@ -203,18 +213,12 @@ def record_property(record_property, metrics):
     return sub
 
 
-@pytest.fixture(autouse=True, scope="session")
-def test_fc_session_root_path():
-    """Ensure and yield the fc session root directory.
-
-    Create a unique temporary session directory. This is important, since the
-    scheduler will run multiple pytest sessions concurrently.
-    """
-    os.makedirs(defs.DEFAULT_TEST_SESSION_ROOT_PATH, exist_ok=True)
-    fc_session_root_path = tempfile.mkdtemp(
-        prefix="fctest-", dir=defs.DEFAULT_TEST_SESSION_ROOT_PATH
-    )
-    yield fc_session_root_path
+@pytest.fixture(scope="session", autouse=True)
+def test_fc_session_root_path(tmp_path_factory):
+    # override the session‐root to something under /tmp
+    tmp_root = tmp_path_factory.mktemp("fc-sessions")
+    defs.DEFAULT_TEST_SESSION_ROOT_PATH = str(tmp_root)
+    yield
 
 
 @pytest.fixture(scope="session")
@@ -266,6 +270,11 @@ def bin_seccomp_paths():
         for example in ["jailer", "harmless", "malicious", "panic"]
     }
     yield demos
+
+
+@pytest.fixture(scope="session")
+def worker_id():
+    return "master"
 
 
 @pytest.fixture(scope="session")
@@ -332,6 +341,7 @@ def microvm_factory(request, record_property, results_dir, netns_factory):
         binary_dir,
         netns_factory=netns_factory,
         custom_cpu_template=custom_cpu_template,
+        jailer_kwargs={"chroot_base": defs.DEFAULT_TEST_SESSION_ROOT_PATH},
     )
     yield uvm_factory
 
